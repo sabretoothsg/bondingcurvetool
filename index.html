@@ -1,4 +1,375 @@
 <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
-... (paste the entire HTML code here) ...
-</html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UniV2 Bonding Curve Calculator (USDC/Token Pool)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --exchequer-green: #00FFB7;
+            --exchequer-dark: #0F1114;
+            --exchequer-gray: #1E2024;
+            --exchequer-light: #FFFFFF;
+            --grid-color: rgba(0, 255, 183, 0.1);
+        }
+
+        body {
+            background-color: var(--exchequer-dark);
+            color: var(--exchequer-light);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-image: 
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .calculator-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid var(--exchequer-green);
+            box-shadow: 0 0 20px rgba(0, 255, 183, 0.1);
+            background-color: var(--exchequer-gray);
+            border-radius: 12px;
+        }
+
+        h1 {
+            color: var(--exchequer-green);
+            font-size: 24px;
+            margin-bottom: 30px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--exchequer-light);
+            font-size: 14px;
+        }
+
+        input {
+            background-color: var(--exchequer-dark);
+            border: 1px solid var(--exchequer-green);
+            color: var(--exchequer-light);
+            padding: 12px;
+            width: 250px;
+            border-radius: 6px;
+            font-family: 'Inter', sans-serif;
+            text-align: right;
+        }
+
+        input:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(0, 255, 183, 0.3);
+        }
+
+        button {
+            background-color: var(--exchequer-green);
+            border: none;
+            color: var(--exchequer-dark);
+            padding: 12px 24px;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+            border-radius: 6px;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background-color: rgba(0, 255, 183, 0.8);
+            transform: translateY(-1px);
+        }
+
+        .chart-container {
+            margin-top: 20px;
+            border: 1px solid rgba(0, 255, 183, 0.2);
+            padding: 20px;
+            border-radius: 12px;
+            background-color: var(--exchequer-gray);
+        }
+
+        .results {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid rgba(0, 255, 183, 0.2);
+            border-radius: 12px;
+            background-color: var(--exchequer-gray);
+        }
+
+        .results h3 {
+            color: var(--exchequer-green);
+            margin-top: 0;
+        }
+
+        .results ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .results li {
+            margin-bottom: 8px;
+            color: var(--exchequer-light);
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .logo {
+            height: 40px;
+            width: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="calculator-container">
+        <div class="logo-container">
+            <img src="https://exchequer.fi/exchequer.svg" alt="Exchequer Logo" class="logo">
+            <h1>UniV2 Bonding Curve Calculator</h1>
+        </div>
+        
+        <div class="input-group">
+            <label for="initialLiquidity">Total Initial Liquidity Value (50% USDC + 50% Tokens):</label>
+            <input type="text" id="initialLiquidity" value="10,000" 
+                   oninput="formatInputValue(this)" 
+                   onblur="formatInputValue(this)">
+            <small style="color: var(--exchequer-light);">Example: $10,000 means $5,000 USDC + $5,000 worth of tokens</small>
+        </div>
+
+        <div class="input-group">
+            <label for="initialMarketCap">Initial Token Market Cap (USD):</label>
+            <input type="text" id="initialMarketCap" value="100,000" 
+                   oninput="formatInputValue(this)" 
+                   onblur="formatInputValue(this)">
+        </div>
+
+        <div class="input-group">
+            <label for="buyingPressure">Net Buying Pressure (USDC):</label>
+            <input type="text" id="buyingPressure" value="5,000" 
+                   oninput="formatInputValue(this)" 
+                   onblur="formatInputValue(this)">
+        </div>
+
+        <button onclick="calculateAndPlot()">Calculate</button>
+
+        <div class="results" id="results">
+            <!-- Results will be displayed here -->
+        </div>
+
+        <div class="chart-container">
+            <canvas id="bondingCurveChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        let chart = null;
+
+        function calculatePrice(k, usdcInPool) {
+            return k / (usdcInPool * usdcInPool);
+        }
+
+        function formatUSDC(value) {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(value);
+        }
+
+        function formatNumber(value) {
+            return new Intl.NumberFormat('en-US').format(value);
+        }
+
+        function parseFormattedNumber(value) {
+            return parseFloat(value.replace(/,/g, ''));
+        }
+
+        function formatInputValue(input) {
+            const value = parseFormattedNumber(input.value);
+            if (!isNaN(value)) {
+                input.value = formatNumber(value);
+            }
+        }
+
+        function calculateAndPlot() {
+            const totalInitialLiquidity = parseFormattedNumber(document.getElementById('initialLiquidity').value);
+            const initialMarketCap = parseFormattedNumber(document.getElementById('initialMarketCap').value);
+            const maxBuyingPressure = parseFormattedNumber(document.getElementById('buyingPressure').value);
+
+            // Calculate initial values considering 50/50 split
+            const initialUsdcInPool = totalInitialLiquidity / 2; // Half of total liquidity is USDC
+            const initialTokenValue = totalInitialLiquidity / 2; // Other half is tokens
+            
+            // First calculate initial price from the pool ratio
+            const initialPrice = initialTokenValue / initialUsdcInPool;
+            
+            // Now calculate token amounts
+            const totalTokenSupply = initialMarketCap / initialPrice;
+            const tokensInPool = initialTokenValue / initialPrice;
+            const percentageInPool = (tokensInPool / totalTokenSupply) * 100;
+            
+            const initialTokens = tokensInPool;
+            const k = initialUsdcInPool * initialTokens; // Constant product k
+
+            // Generate data points for the curve
+            const dataPoints = 100;
+            const buyingPressureValues = [];
+            const marketCapValues = [];
+            const priceValues = []; // Add array to track price changes
+
+            for (let i = 0; i <= dataPoints; i++) {
+                const currentBuyingPressure = (maxBuyingPressure * i / dataPoints);
+                buyingPressureValues.push(currentBuyingPressure);
+                
+                const usdcInPool = initialUsdcInPool + currentBuyingPressure;
+                const tokensInPool = k / usdcInPool;
+                const currentPrice = usdcInPool / tokensInPool; // Price is USDC/Tokens ratio
+                priceValues.push(currentPrice);
+                marketCapValues.push(currentPrice * totalTokenSupply);
+            }
+
+            // Calculate final values
+            const finalUsdcInPool = initialUsdcInPool + maxBuyingPressure;
+            const finalTokensInPool = k / finalUsdcInPool;
+            const finalPrice = finalUsdcInPool / finalTokensInPool;
+            const finalMarketCap = finalPrice * totalTokenSupply;
+
+            // Update results display
+            document.getElementById('results').innerHTML = `
+                <h3>Results:</h3>
+                <p>Initial Pool Composition:</p>
+                <ul style="color: var(--exchequer-light);">
+                    <li>USDC: ${formatUSDC(initialUsdcInPool)}</li>
+                    <li>Tokens Value: ${formatUSDC(initialTokenValue)}</li>
+                    <li>Total Token Supply: ${totalTokenSupply.toLocaleString(undefined, {maximumFractionDigits: 2})} tokens</li>
+                    <li>Tokens in Liquidity Pool: ${tokensInPool.toLocaleString(undefined, {maximumFractionDigits: 2})} tokens</li>
+                    <li>Percentage of Supply in LP: ${percentageInPool.toFixed(2)}%</li>
+                </ul>
+                <p>Initial Token Price: ${formatUSDC(initialPrice)}</p>
+                <p>Final Token Price: ${formatUSDC(finalPrice)}</p>
+                <p>Final Market Cap: ${formatUSDC(finalMarketCap)}</p>
+                <p>Price Impact: ${((finalPrice/initialPrice - 1) * 100).toFixed(2)}%</p>
+            `;
+
+            // Add warning if percentage in pool is unusually high or low
+            if (percentageInPool > 50) {
+                document.getElementById('results').innerHTML += `
+                    <p style="color: #ff0000;">Warning: High percentage of tokens in LP (>${percentageInPool.toFixed(2)}%) may indicate high selling pressure risk.</p>
+                `;
+            } else if (percentageInPool < 5) {
+                document.getElementById('results').innerHTML += `
+                    <p style="color: #ff0000;">Warning: Low percentage of tokens in LP (<${percentageInPool.toFixed(2)}%) may indicate high volatility risk.</p>
+                `;
+            }
+
+            // Update chart
+            if (chart) {
+                chart.destroy();
+            }
+
+            const ctx = document.getElementById('bondingCurveChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: buyingPressureValues,
+                    datasets: [{
+                        label: 'Market Cap (USDC)',
+                        data: marketCapValues,
+                        borderColor: '#ff71ce',
+                        borderWidth: 2,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Market Cap vs Buying Pressure',
+                            color: '#00FFB7',
+                            font: {
+                                family: "'Inter', sans-serif",
+                                size: 16,
+                                weight: 500
+                            }
+                        },
+                        legend: {
+                            labels: {
+                                color: '#FFFFFF',
+                                font: {
+                                    family: "'Inter', sans-serif"
+                                }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: '#1E2024',
+                            titleColor: '#00FFB7',
+                            bodyColor: '#FFFFFF',
+                            borderColor: '#00FFB7',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Market Cap: ' + formatUSDC(context.raw);
+                                },
+                                title: function(context) {
+                                    return 'Buying Pressure: ' + formatUSDC(context[0].parsed.x);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            title: {
+                                display: true,
+                                text: 'Net Buying Pressure (USDC)',
+                                color: '#00FFB7'
+                            },
+                            grid: {
+                                color: 'rgba(0, 255, 183, 0.1)'
+                            },
+                            ticks: {
+                                color: '#FFFFFF',
+                                font: {
+                                    family: "'Inter', sans-serif"
+                                }
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Market Cap (USDC)',
+                                color: '#00FFB7'
+                            },
+                            grid: {
+                                color: 'rgba(0, 255, 183, 0.1)'
+                            },
+                            ticks: {
+                                color: '#FFFFFF',
+                                font: {
+                                    family: "'Inter', sans-serif"
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Calculate initially
+        calculateAndPlot();
+    </script>
+</body>
+</html> 
